@@ -13,12 +13,12 @@ spring:
         - id: account-service
           uri: http://localhost:8081
           predicates:
-            - Path=/api/v1/account/**
+            - Path=/api/v1/accounts,/api/v1/accounts/**
           filters:
             - name: RequestRateLimiter
               args:
-                redis-rate-limiter-replenishRate: 10
-                redis-rate-limiter-burstCapacity: 20
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
 
         # Transaction service routes
         - id: transaction-service
@@ -28,8 +28,8 @@ spring:
           filters:
             - name: RequestRateLimiter
               args:
-                redis-rate-limiter-replenishRate: 10
-                redis-rate-limiter-burstCapacity: 20
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
 
         # Payment service routes
         - id: payment-service
@@ -39,8 +39,8 @@ spring:
           filters:
             - name: RequestRateLimiter
               args:
-                redis-rate-limiter-replenishRate: 5
-                redis-rate-limiter-burstCapacity: 10
+                redis-rate-limiter.replenishRate: 5
+                redis-rate-limiter.burstCapacity: 10
 
 server:
   port: 8080

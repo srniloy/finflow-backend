@@ -115,6 +115,7 @@ public class TransactionService {
         String otpKey = "verification:otp"+ transactionId;
         String storedOtp = redisTemplate.opsForValue().get(otpKey);
 
+
         if(storedOtp == null){
             // OTP EXPIRED
             log.warn("OTP expired for transaction: {}", transactionId);
@@ -122,7 +123,7 @@ public class TransactionService {
             return mapToResponse(transaction);
         }
 
-        if(storedOtp.equals(otp)){
+        if(!storedOtp.equals(otp)){
             // BLOCK ACCOUNT AND REFUND
             log.warn("Wrong OTP - blocking account and refunding: {}", transactionId);
             blockAccountAndCompensate(transaction,

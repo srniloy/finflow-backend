@@ -23,7 +23,7 @@ public class FraudDetectionService {
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final RedisTemplate<String, String> redisTemplate;
 
-    @Value("${fraud:max-transactions-per-minute}")
+    @Value("${fraud.max-transactions-per-minute}")
     private int maxTransactionsPerMinute;
 
     @Value("${fraud.suspicious-amount-multiplier}")
@@ -37,8 +37,9 @@ public class FraudDetectionService {
 
     public void checkTransaction(Map<String, Object> payload) {
         String transactionId = (String) payload.get("transactionId");
-        String accountNumber = (String) payload.get("accountNumber");
-        BigDecimal amount = (BigDecimal) payload.get("amount");
+        String accountNumber = (String) payload.get("senderAccountNumber");
+        BigDecimal amount = new BigDecimal(String.valueOf(payload.get("amount")));
+
 
         // Fetch real balance from Account Service
         BigDecimal senderBalance = accountServiceClient.getBalance(accountNumber);

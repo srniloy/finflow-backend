@@ -3,8 +3,10 @@ package com.finflow.frauddetectionservice;
 import com.finflow.frauddetectionservice.client.AccountServiceClient;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.openfeign.EnableFeignClients;
 
 @SpringBootApplication
+@EnableFeignClients
 public class FraudDetectionServiceApplication {
 
 
