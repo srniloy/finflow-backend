@@ -16,10 +16,9 @@ public class NotificationService {
             @Payload Map<String, Object> payload
             ){
         try{
-            String accountNumber = (String) payload.get("accountNumber");
-            String otp = (String) payload.get("otp");
-            String transactionId = (String) payload.get("transactionId");
-            String amount = (String) payload.get("amount");
+            String accountNumber = String.valueOf(payload.get("accountNumber"));
+            String otp = String.valueOf(payload.get("otp"));
+            String amount = String.valueOf(payload.get("amount"));
             String reason = (String) payload.get("reason");
 
             sendAlert(
@@ -30,7 +29,8 @@ public class NotificationService {
                                     "Reason: %s "+
                                     "A transaction of %s is pending verification. "+
                                     "Your OTP is: %s. Valid for 5 minutes. "+
-                                    "If this wasn't you - ignore this message."
+                                    "If this wasn't you - ignore this message.",
+                                    reason, amount, otp
                     )
             );
 
@@ -44,9 +44,9 @@ public class NotificationService {
             @Payload Map<String, Object> payload
     ){
         try{
-            String senderAccount = (String) payload.get("senderAccountNumber");
-            String receiverAccount = (String) payload.get("receiverAccountNumber");
-            String amount = (String) payload.get("amount");
+            String senderAccount = String.valueOf(payload.get("senderAccountNumber"));
+            String receiverAccount = String.valueOf(payload.get("receiverAccountNumber"));
+            String amount = String.valueOf(payload.get("amount"));
 
             // DEBIT ALERT
             sendAlert(senderAccount,
@@ -56,7 +56,7 @@ public class NotificationService {
                             amount, senderAccount
                     ));
             // CREDIT ALERT
-            sendAlert(senderAccount,
+            sendAlert(receiverAccount,
                     "CREDIT ALERT",
                     String.format(
                             "%s credited from account %s",

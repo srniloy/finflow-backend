@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 public class TransactionCompletedEvent {
     private String transactionId;
     private String senderAccountNumber;
-    private String receiverAccountNUmber;
+    private String receiverAccountNumber;
     private BigDecimal amount;
     private String description;
 }
