@@ -3,10 +3,10 @@ spring:
     name: fraud-detection-service
   data:
     redis:
-      host: localhost
-      port: 6379
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
       group-id: fraud-detection-group
       auto-offset-reset: earliest
@@ -33,7 +33,7 @@ server:
 # Account Service URL for Feign Client
 account:
   service:
-    url: http://localhost:8081
+    url: ${ACCOUNT_SERVICE_URL:http://localhost:8081}
 
 fraud:
   max-transactions-per-minute: 5
