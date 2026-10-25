@@ -181,3 +181,5 @@ build/
 .cache/
 .tmp/
 temp/
+
+.env
