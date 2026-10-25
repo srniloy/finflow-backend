@@ -38,6 +38,10 @@ spring:
 
 server:
   port: 8081
+  error:
+    # Include `message` in default error bodies so business reasons
+    # (e.g. "Account already exists for email: ...") reach the frontend.
+    include-message: always
 
 management:
   endpoints:

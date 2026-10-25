@@ -9,4 +9,8 @@ import java.util.List;
 public interface TransactionRepository extends JpaRepository<Transaction, String> {
 
     List<Transaction> findBySenderAccountNumberOrderByCreatedAtDesc(String accountNumber);
+
+    /** Sent + received transactions (history fix #3.3). */
+    List<Transaction> findBySenderAccountNumberOrReceiverAccountNumberOrderByCreatedAtDesc(
+            String senderAccountNumber, String receiverAccountNumber);
 }

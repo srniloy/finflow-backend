@@ -40,6 +40,29 @@ public class AccountEventConsumer {
     }
 
     /**
+     * Consume payment.completed event from kafka (Razorpay webhook -> payment-service).
+     * Credits the account balance for the payment.
+     * @param payload
+     */
+
+    @KafkaListener(topics = "payment.completed")
+    public void consumePaymentCompleted(
+            @Payload Map<String, Object> payload
+            ){
+        try {
+            String accountNumber = (String) payload.get("accountNumber");
+            BigDecimal amount = new BigDecimal(payload.get("amount").toString());
+
+            log.info("Payment completed - crediting account: {} amount: {}", accountNumber, amount);
+
+            accountService.creditBalance(accountNumber, amount);
+        }
+        catch (Exception e){
+            log.error("Error crediting account for payment: {}", e.getMessage());
+        }
+    }
+
+    /**
      * Consume fraud.detected event from kafka
      * Blocks the flagged account.
      * @param payload

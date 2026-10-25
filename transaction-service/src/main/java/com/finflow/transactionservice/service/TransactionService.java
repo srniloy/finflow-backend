@@ -1,6 +1,7 @@
 package com.finflow.transactionservice.service;
 
 import com.finflow.transactionservice.client.AccountServiceClient;
+import com.finflow.transactionservice.dto.AmountRequest;
 import com.finflow.transactionservice.dto.TransactionResponse;
 import com.finflow.transactionservice.dto.TransferRequest;
 import com.finflow.transactionservice.entity.Transaction;
@@ -84,8 +85,63 @@ public class TransactionService {
 
     }
 
-    public TransactionResponse getTransaction(String transactionId){
-        return mapToResponse(transactionRepository
+    /**
+     * Deposits money into an account.
+     * Credits the account synchronously via the existing Feign client (credit endpoint),
+     * then saves the transaction as COMPLETED.
+     */
+    public TransactionResponse deposit(
+            AmountRequest request
+    ){
+        log.info("Deposit: {} amount: {}", request.getAccountNumber(), request.getAmount());
+
+        // Credit the receiver account (money in).
+        accountServiceClient.creditBalance(request.getAccountNumber(), request.getAmount());
+
+        Transaction transaction = new Transaction();
+        transaction.setSenderAccountNumber(request.getAccountNumber());  // external source -> self
+        transaction.setReceiverAccountNumber(request.getAccountNumber());
+        transaction.setAmount(request.getAmount());
+        transaction.setType(TransactionType.DEPOSIT);
+        transaction.setStatus(TransactionStatus.COMPLETED);
+        transaction.setDescription(request.getDescription());
+        transaction.setReferenceNumber(UUID.randomUUID().toString());
+
+        Transaction savedTransaction = transactionRepository.save(transaction);
+        log.info("Deposit completed: {}", savedTransaction.getId());
+
+        return mapToResponse(savedTransaction);
+    }
+
+    /**
+     * Withdraws money from an account.
+     * Deducts synchronously via the existing Feign client (deduct endpoint - validates
+     * sufficient funds and account status), then saves the transaction as COMPLETED.
+     */
+    public TransactionResponse withdrawal(
+            AmountRequest request
+    ){
+        log.info("Withdrawal: {} amount: {}", request.getAccountNumber(), request.getAmount());
+
+        // Deduct from the sender account (money out).
+        accountServiceClient.deductBalance(request.getAccountNumber(), request.getAmount());
+
+        Transaction transaction = new Transaction();
+        transaction.setSenderAccountNumber(request.getAccountNumber());
+        transaction.setReceiverAccountNumber(request.getAccountNumber());  // cash -> self
+        transaction.setAmount(request.getAmount());
+        transaction.setType(TransactionType.WITHDRAWAL);
+        transaction.setStatus(TransactionStatus.COMPLETED);
+        transaction.setDescription(request.getDescription());
+        transaction.setReferenceNumber(UUID.randomUUID().toString());
+
+        Transaction savedTransaction = transactionRepository.save(transaction);
+        log.info("Withdrawal completed: {}", savedTransaction.getId());
+
+        return mapToResponse(savedTransaction);
+    }
+
+    public TransactionResponse getTransaction(String transactionId){        return mapToResponse(transactionRepository
                 .findById(transactionId)
                 .orElseThrow(()-> new RuntimeException(
                         "Transaction not found: "+transactionId
@@ -95,7 +151,8 @@ public class TransactionService {
 
     public List<TransactionResponse> getTransactionHistory(String accountNumber){
         return transactionRepository
-                .findBySenderAccountNumberOrderByCreatedAtDesc(accountNumber)
+                .findBySenderAccountNumberOrReceiverAccountNumberOrderByCreatedAtDesc(
+                        accountNumber, accountNumber)
                 .stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());

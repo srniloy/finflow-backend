@@ -1,6 +1,7 @@
 package com.finflow.transactionservice.controller;
 
 
+import com.finflow.transactionservice.dto.AmountRequest;
 import com.finflow.transactionservice.dto.TransactionResponse;
 import com.finflow.transactionservice.dto.TransferRequest;
 import com.finflow.transactionservice.entity.Transaction;
@@ -28,6 +29,22 @@ public class TransactionController {
             ){
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(transactionService.transfer(request));
+    }
+
+    @PostMapping("/deposit")
+    public ResponseEntity<TransactionResponse> deposit(
+            @Valid @RequestBody AmountRequest request
+    ){
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(transactionService.deposit(request));
+    }
+
+    @PostMapping("/withdrawal")
+    public ResponseEntity<TransactionResponse> withdrawal(
+            @Valid @RequestBody AmountRequest request
+    ){
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(transactionService.withdrawal(request));
     }
 
     @GetMapping("/{transactionId}")

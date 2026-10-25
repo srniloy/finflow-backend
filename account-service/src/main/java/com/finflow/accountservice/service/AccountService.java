@@ -28,6 +28,10 @@ public class AccountService {
             throw new RuntimeException("Account already exists for email: "+request.getEmail());
         }
 
+        if(accountRepository.existsByPhone(request.getPhone())){
+            throw new RuntimeException("Account already exists for this phone number: "+request.getPhone());
+        }
+
         Account account = new Account();
         account.setAccountHolderName(request.getAccountHolderName());
         account.setEmail(request.getEmail());
