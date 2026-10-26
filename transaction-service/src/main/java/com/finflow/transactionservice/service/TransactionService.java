@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.cglib.core.Local;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -32,10 +33,17 @@ public class TransactionService {
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final RedisTemplate<String, String> redisTemplate;
 
+    /** OTP Redis TTL is 5 min - sweep anything older than this. */
+    private static final int OTP_EXPIRY_GRACE_MINUTES = 6;
+
     private static final String TRANSACTION_INITIATED_TOPIC = "transaction.initiated";
     private static final String TRANSACTION_COMPLETED_TOPIC = "transaction.completed";
     private static final String TRANSACTION_REFUNDED_TOPIC = "transaction.refunded";
     private static final String FRAUD_DETECTION_TOPIC = "fraud.detected";
+    // separate topics: transaction.completed also credits the receiver via
+    // account-service - deposit/withdrawal already moved the money synchronously
+    private static final String TRANSACTION_DEPOSIT_TOPIC = "transaction.deposit.completed";
+    private static final String TRANSACTION_WITHDRAWAL_TOPIC = "transaction.withdrawal.completed";
 
     /**
      * SAGA STEP - 1: Initiate transfer
@@ -110,6 +118,8 @@ public class TransactionService {
         Transaction savedTransaction = transactionRepository.save(transaction);
         log.info("Deposit completed: {}", savedTransaction.getId());
 
+        publishCompletedEvent(TRANSACTION_DEPOSIT_TOPIC, savedTransaction);
+
         return mapToResponse(savedTransaction);
     }
 
@@ -137,6 +147,8 @@ public class TransactionService {
 
         Transaction savedTransaction = transactionRepository.save(transaction);
         log.info("Withdrawal completed: {}", savedTransaction.getId());
+
+        publishCompletedEvent(TRANSACTION_WITHDRAWAL_TOPIC, savedTransaction);
 
         return mapToResponse(savedTransaction);
     }
@@ -198,6 +210,15 @@ public class TransactionService {
     }
 
     private void compensateTransaction(Transaction transaction, String reason){
+        // Guard against double-refund: the scheduled sweeper and a manual verifyOTP
+        // can race - only compensate a transaction that is still in flight.
+        if (transaction.getStatus() != TransactionStatus.PROCESSING
+                && transaction.getStatus() != TransactionStatus.PENDING_VERIFICATION) {
+            log.warn("Skipping compensation - transaction {} already in status {}",
+                    transaction.getId(), transaction.getStatus());
+            return;
+        }
+
         log.warn("SAGA COMPENSATION - refunding: {} amount: {}",
                 transaction.getSenderAccountNumber(),
                 transaction.getAmount());
@@ -246,8 +267,20 @@ public class TransactionService {
         compensateTransaction(transaction, reason);
     }
 
-    private void completeTransaction(Transaction transaction){
-        transaction.setStatus(TransactionStatus.COMPLETED);
+    /** Publishes a completed-transaction event (deposit / withdrawal notifications). */
+    private void publishCompletedEvent(String topic, Transaction transaction){
+        TransactionCompletedEvent event = new TransactionCompletedEvent(
+                transaction.getId(),
+                transaction.getSenderAccountNumber(),
+                transaction.getReceiverAccountNumber(),
+                transaction.getAmount(),
+                transaction.getDescription()
+        );
+        kafkaTemplate.send(topic, transaction.getId(), event);
+        log.info("Published {}: {}", topic, transaction.getId());
+    }
+
+    private void completeTransaction(Transaction transaction){        transaction.setStatus(TransactionStatus.COMPLETED);
         transaction.setCompletedAt(LocalDateTime.now());
         transactionRepository.save(transaction);
 
@@ -277,6 +310,29 @@ public class TransactionService {
         }
 
         completeTransaction(transaction);
+    }
+
+    /**
+     * Auto-expiry sweeper: transactions stuck in PENDING_VERIFICATION after the
+     * OTP has expired (Redis TTL is 5 min) are cancelled and refunded, so an
+     * ignored OTP cannot freeze the deducted amount forever.
+     */
+    @Scheduled(fixedDelay = 60_000)
+    public void expireStalePendingVerifications(){
+        List<Transaction> stale = transactionRepository.findByStatusAndCreatedAtBefore(
+                TransactionStatus.PENDING_VERIFICATION,
+                LocalDateTime.now().minusMinutes(OTP_EXPIRY_GRACE_MINUTES));
+
+        for (Transaction transaction : stale) {
+            // skip if the OTP somehow still exists - never refund a live verification
+            String otpKey = "verification:otp" + transaction.getId();
+            if (redisTemplate.opsForValue().get(otpKey) != null) {
+                continue;
+            }
+            log.warn("Auto-expiring stale PENDING_VERIFICATION transaction: {}", transaction.getId());
+            compensateTransaction(transaction,
+                    "OTP expired - transaction cancelled and amount refunded");
+        }
     }
 
     private TransactionResponse mapToResponse(Transaction transaction){

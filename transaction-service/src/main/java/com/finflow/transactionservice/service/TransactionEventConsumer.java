@@ -2,6 +2,7 @@ package com.finflow.transactionservice.service;
 
 import com.finflow.transactionservice.entity.Transaction;
 import com.finflow.transactionservice.entity.TransactionStatus;
+import com.finflow.transactionservice.entity.TransactionType;
 import com.finflow.transactionservice.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -11,8 +12,11 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -97,6 +101,50 @@ public class TransactionEventConsumer {
             transactionService.processCleanResult(transactionId);
         } catch (Exception e) {
             log.error("Error processing fraud check result: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Consume payment.completed (Razorpay webhook -> payment-service) and record
+     * the online payment in the transaction history so it shows in activity lists.
+     * The balance credit happens in account-service; here we only add the history record.
+     */
+    @KafkaListener(topics = "payment.completed")
+    public void consumePaymentCompleted(
+            @Payload Map<String, Object> payload
+    ){
+        try{
+            String accountNumber = (String) payload.get("accountNumber");
+            BigDecimal amount = new BigDecimal(payload.get("amount").toString());
+            String razorpayPaymentId = (String) payload.get("razorpayPaymentId");
+            String description = (String) payload.get("description");
+
+            if (razorpayPaymentId != null &&
+                    transactionRepository.existsByReferenceNumber(razorpayPaymentId)) {
+                log.info("Payment history record already exists for Razorpay payment {}",
+                        razorpayPaymentId);
+                return;
+            }
+
+            Transaction transaction = new Transaction();
+            // paid from an external card via Razorpay - recorded as a credit to the holder
+            transaction.setSenderAccountNumber(accountNumber);
+            transaction.setReceiverAccountNumber(accountNumber);
+            transaction.setAmount(amount);
+            transaction.setType(TransactionType.PAYMENT);
+            transaction.setStatus(TransactionStatus.COMPLETED);
+            transaction.setDescription(description != null && !description.isBlank()
+                    ? description
+                    : "Online payment via Razorpay");
+            transaction.setReferenceNumber(razorpayPaymentId != null
+                    ? razorpayPaymentId
+                    : UUID.randomUUID().toString());
+            transaction.setCompletedAt(LocalDateTime.now());
+
+            Transaction savedTransaction = transactionRepository.save(transaction);
+            log.info("Payment recorded in transaction history: {}", savedTransaction.getId());
+        } catch (Exception e) {
+            log.error("Error recording payment history record: {}", e.getMessage());
         }
     }
 }
